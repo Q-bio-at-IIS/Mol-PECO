@@ -348,7 +348,7 @@ if __name__ == '__main__':
     # dumper = DREAMPyrfumeDumper(data_dir, step_binary = 20, cou_norm = "binary", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
     # dumper.dump()
 
-    data_dir = "../dream_pyrfume_models3/dumped30_coulomb_frobenius/"
-    atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream_addHs/atom2id.txt"
+    data_dir = "../pyrfume_models3_sois/dumped30_coulomb_frobenius/"
+    atom2id_path = "../pyrfume_models3_sois/dumped30_coulomb_frobenius/atom2id.txt"
     dumper = DREAMPyrfumeDumper(data_dir, step_binary = -1, cou_norm = "frobenius", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
     dumper.dump()
