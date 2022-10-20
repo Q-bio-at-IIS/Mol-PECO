@@ -15,7 +15,8 @@ All comes from pyrfume-data (https://github.com/pyrfume/pyrfume-data). After dat
 The dataset was split by second order iterative stratification, same as Google's split method (https://arxiv.org/abs/1910.10685), to handle the imbalanced distribution of odor descriptors with train/val/test of  8/1/1.
 
 ### Example
-Please run ```python train_pyrfume_lpe.py``` to train the LGNN model with pyrfume dataset.
+1. Please run ```python preprocess_atom2id.py``` to calculate to adjacent matrix, Coulomb matrix, etc.
+2. Please run ```python train_pyrfume_lpe.py``` to train and evaluate the LGNN model with pyrfume dataset.
 
 ### To do list
 Baseline models ...
