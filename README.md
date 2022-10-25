@@ -16,12 +16,39 @@ All comes from pyrfume-data (https://github.com/pyrfume/pyrfume-data). After dat
 - Eigenvectors and eigenvalues of adjacent matrix
 - Eigenvectors and eigenvalues of Coulomb matrix
 
-#### Data plit
+#### Data split
 The dataset was split by second order iterative stratification, same as Google's split method (https://arxiv.org/abs/1910.10685), to handle the imbalanced distribution of odor descriptors with train/val/test of  8/1/1.
 
 ### Example
-1. Please run ```python preprocess_atom2id.py``` to calculate to adjacent matrix, Coulomb matrix, etc.
-2. Please run ```python train_pyrfume_lpe.py``` to train and evaluate the LGNN model with pyrfume dataset.
+#### Requirements
+- python-3.7+
+- deepchem
+- matplotlib
+- openpyxl
+- pyTorch
+- pandas
+- rdkit
+- scipy
+- seaborn
+- sklearn
+- tensorboard
+- tqdm
+
+#### Quick Start
+```sh
+% python -m venv venv                    # create python virtual env
+% source ./venv/bin/activate             # activate venv
+% pip install -r requirements.txt        # install requirements (confirmed to work with CUDA 11.1 on ubuntu 18.04)
+
+% python preprocess_atom2id.py           # calculate to adjacent matrix, Coulomb matrix, etc.
+...
+100%|█████████████████████████████████████| 12336/12336 [07:28<00:00, 27.49it/s]
+
+% python train_pyrfume_lpe.py            # train and evaluate the LGNN model with pyrfume dataset.
+...
+min loss at 12: 0.62    max auc at 12: 0.58:   2%|▊                                    | 14/600 [21:44<14:48:30, 90.97s/it]]
+...
+```
 
 ### To do list
 Baseline models ...
