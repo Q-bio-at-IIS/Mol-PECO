@@ -7,6 +7,8 @@
 
 import os, torch
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,171 +23,6 @@ from matplotlib import pyplot as plt
 import matplotlib.pylab as pylab
 font = {"axes.labelsize": 16, "xtick.labelsize": 16, "ytick.labelsize": 16}
 pylab.rcParams.update(font)
-
-class Trainer(object):
-    """docstring for Trainer"""
-    def __init__(self, model, train_loader, val_loader, epoch, labels, out_dir, lr):
-        super(Trainer, self).__init__()
-        self.model = model.cuda()
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.epoch = epoch
-        self.labels_list = labels
-        self.out_dir = out_dir
-        self.optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr = lr)
-        self.scheduler = OneCycleLR(self.optimizer, max_lr = lr/10., steps_per_epoch = len(self.train_loader), epochs = self.epoch)
-        # self.criterion = nn.L1Loss(reduction = "none")
-        self.criterion = nn.BCELoss(reduction = "none")
-        self.writer = SummaryWriter(os.path.join(out_dir, "logging"))
-        os.makedirs(self.out_dir, exist_ok = True)
-
-    def _to_var(self, x, t = "float"):
-        x = np.array(x)
-        if t == "int":
-            return torch.LongTensor(x).cuda()
-        elif t == "bool":
-            return torch.BoolTensor(x).cuda()
-        else:
-            return torch.FloatTensor(x).cuda()
-
-    def _to_var_dict(self, x):
-        new_dict = {}
-        for k, v in x.items():
-            new_dict[k] = self._to_var(v, t = "float")
-        return new_dict
-
-    def _to_np(self, x):
-        if torch.is_tensor(x):
-            return x.detach().cpu().numpy().squeeze()
-        else:
-            return x.squeeze()
-
-    # def _call_loss(self, preds, labels):
-    #     losses = 0
-    #     for l in self.labels_list:
-    #         # loss = self.criterion(F.sigmoid(preds[l]), self._to_var(labels[l]))
-    #         loss = self.criterion(preds[l], self._to_var(labels[l]))
-    #         weight = self._to_var(labels["{}_weight".format(l)].squeeze(), "bool")
-    #         loss = torch.mean(loss * weight)
-    #         losses += loss
-    #     return losses/len(self.labels_list)
-
-    def _call_loss_log(self, preds, labels, epsilon = 1e-9):
-        losses = 0 
-        for l in self.labels_list:
-            weight = self._to_var(labels["{}_weight".format(l)].squeeze())
-            pred, label = preds[l], self._to_var(labels[l])
-            pred = torch.sigmoid(pred)
-            mae = torch.mean(self.criterion(pred, label)*weight)
-            log = torch.abs(torch.log(pred + epsilon) - torch.log(label + epsilon))
-            mean_log = torch.mean(log*weight)
-            this_loss = mae + mean_log
-            this_loss *= labels["label_weights"][l]
-
-            losses += this_loss
-
-        return losses/len(self.labels_list)
-
-    def _cal_pearson(self, preds, labels):
-        rs = []
-        for l in self.labels_list:
-            r, p = pearsonr(self._to_np(preds[l]), labels[l].squeeze())
-            rs.append(r)
-        return rs
-
-    def _cal_auc(self, preds, labels):
-        aucs, nums = {}, {}
-        for l in self.labels_list:
-            auc = metrics.roc_auc_score(labels[l], preds[l])
-            aucs[l] = auc
-            nums[l] = sum(labels[l])/len(labels[l])
-
-        return aucs, nums
-
-    def _data_to_var(self, data):
-        atom_feats, adj_feats, mol_masks = data["atom_feat"], data["adj_feat"], data["mol_mask"]
-        atom_feats = self._to_var(atom_feats, t = "int")
-        adj_feats = self._to_var_dict(adj_feats)
-        mol_masks = self._to_var(mol_masks, t = "bool")
-        return atom_feats, adj_feats, mol_masks
-
-    def train_on_step(self, data):
-        atom_feats, adj_feats, mol_masks = self._data_to_var(data)
-        self.optimizer.zero_grad()
-        preds = self.model(atom_feats, adj_feats, mol_masks)
-        loss = self._call_loss_log(preds, data)
-        loss.backward()
-        self.optimizer.step()
-        self.scheduler.step()
-        return loss.item(), preds
-
-    def val_on_step(self, data):
-        atom_feats, adj_feats, mol_masks = self._data_to_var(data)
-        preds = self.model(atom_feats, adj_feats, mol_masks)
-        loss = self._call_loss_log(preds, data)
-        return loss.item(), preds
-
-    def save_model(self, epoch, loss):
-        # model_path = os.path.join(self.out_dir, "model_e{}_{}.ckpt".format(epoch, round(loss, 2)))
-        # torch.save(self.model.state_dict(), model_path)
-        torch.save(self.model.state_dict(), os.path.join(self.out_dir, "min.ckpt"))
-
-    def _update_total_dict(self, total_dict, dicts):
-        for l in self.labels_list:
-            if l in total_dict:
-                total_dict[l] = total_dict[l] + self._to_np(dicts[l]).tolist()
-            else:
-                total_dict[l] = self._to_np(dicts[l]).tolist()
-        return total_dict
-
-    def fit_classification(self):
-        best_loss, best_auc = 9999, -1
-        for e in tqdm(range(self.epoch), ncols = 80):
-            train_loss, val_data, val_preds, val_loss, val_auc = 0, {}, {}, 0, []
-
-            self.model.train()
-            for data in self.train_loader:
-                loss, preds = self.train_on_step(data)
-                train_loss += loss
-            train_loss /= len(self.train_loader)
-
-            self.model.eval()
-            for data in self.val_loader:
-                loss, val_pred = self.val_on_step(data)
-                val_loss += loss
-                val_preds = self._update_total_dict(val_preds, val_pred)
-                val_data = self._update_total_dict(val_data, data)
-            val_loss /= len(self.val_loader)
-            val_aucs, val_nums = self._cal_auc(val_preds, val_data)
-
-            self.writer.add_scalars("Loss", {"train": train_loss, "validation": val_loss}, e)
-            self.writer.add_scalars("AUC (validation)", val_aucs, e)
-            self.writer.add_scalar("LR", self.optimizer.param_groups[0]['lr'], e)
-            if val_loss < best_loss:
-                self.save_model(e, val_loss)
-                best_loss = val_loss
-                best_auc = np.mean(list(val_aucs.values()))
-
-        ## add matplotlib image
-        fig, ax = plt.subplots()
-        for l in self.labels_list:
-            ax.scatter(val_nums[l], val_aucs[l], label = l)
-        ax.set_xlabel("# positive sample (%)")
-        ax.set_ylabel("AUC (validation)")
-        plt.savefig(os.path.join(self.out_dir, "clf.png"), bbox_inches = "tight", dpi = 300)
-        return best_loss, best_auc       
-
-    def test(self):
-        val_data, val_preds, val_loss, val_auc = {}, {}, 0, []
-        self.model.eval()
-        for data in self.val_loader:
-            loss, val_pred = self.val_on_step(data)
-            val_loss += loss
-            val_preds = self._update_total_dict(val_preds, val_pred)
-            val_data = self._update_total_dict(val_data, data)
-        val_loss /= len(self.val_loader)
-        val_aucs, val_nums = self._cal_auc(val_preds, val_data)
-        return val_loss, np.mean(list(val_aucs.values()))   
 
 class TrainerCoulomb(object):
     """docstring for TrainerCoulomb"""
@@ -243,8 +80,24 @@ class TrainerCoulomb(object):
 
         return losses/len(self.labels_list)
 
-    def _cal_auc_auprc_precision_f1(self, preds, labels):
-        aucs, auprcs, precisions, f1s, nums = {}, {}, {}, {}, {}
+    def draw_preds(self, preds, labels, mark, thresholds):
+        
+        out_dir = os.path.join(self.out_dir, mark)
+        os.makedirs(out_dir, exist_ok = True)
+        for l in self.labels_list:
+            if l not in thresholds:
+                continue
+            xs = np.arange(len(preds[l]))
+            df = pd.DataFrame()
+            df["no"] = xs
+            df["pred"] = preds[l] >= thresholds[l]
+            df["label"] = labels[l]
+            fig = plt.figure()
+            sns.scatterplot(data = df, x = "no", y = "pred", hue = "label")
+            plt.savefig(os.path.join(out_dir, "{}.png".format(l)), bbox_inches = "tight")
+
+    def _cal_auc_auprc_metrics(self, preds, labels):
+        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds = {}, {}, {}, {}, {}, {}, {}, {}, {}
         for l in self.labels_list:
             if sum(labels[l]) == 0:
                 continue
@@ -252,25 +105,41 @@ class TrainerCoulomb(object):
             auprc = metrics.average_precision_score(labels[l], preds[l])
 
             threshold = self._cal_youden(preds[l], labels[l])
-            precision, f1 = self._cal_precision_f1(preds[l] >= threshold, labels[l])
+            precision, recall, specificity, f1, acc = self._cal_metrics((preds[l] >= threshold).astype(int), labels[l])
 
             aucs[l] = auc
             nums[l] = sum(labels[l])/len(labels[l])
             auprcs[l] = auprc
             precisions[l] = precision
+            recalls[l] = recall
+            specificities[l] = specificity
             f1s[l] = f1
+            accs[l] = acc
+            thresholds[l] = threshold
 
-        return aucs, auprcs, precisions, f1s, nums
+        return aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds
 
     def _cal_youden(self, preds, labels):
         fpr, tpr, thresholds = metrics.roc_curve(labels, preds)
         idx = np.argmax(tpr - fpr)
         return thresholds[idx]
 
-    def _cal_precision_f1(self, preds, labels):
+    def _cal_max_acc(self, preds, labels):
+        thresholds, accuracies = [], []
+        for p in np.unique(preds):
+            thresholds.append(p)
+            preds_int = (preds >= p).astype(int)
+            accuracies.append(metrics.balanced_accuracy_score(labels, preds_int))
+        argmax = np.argmax(accuracies)
+        return thresholds[argmax]
+
+    def _cal_metrics(self, preds, labels):
         precision = metrics.precision_score(labels, preds)
+        recall = metrics.recall_score(labels, preds)
+        specificity = metrics.recall_score(labels, preds, pos_label = 0)
         f1 = metrics.f1_score(labels, preds)
-        return precision, f1
+        acc = metrics.balanced_accuracy_score(labels, preds)
+        return precision, recall, specificity, f1, acc
 
     def _data_to_var(self, data):
         atom_feats, cou_feats, mol_masks = data["atom_feat"], data["coulomb_feat"], data["mol_mask"]
@@ -353,21 +222,24 @@ class TrainerCoulomb(object):
             val_loss_raw /= len(self.val_loader)
             val_loss_comb /= len(self.val_loader)
 
-            val_aucs, val_auprcs, val_precisions, val_f1s, val_nums = self._cal_auc_auprc_precision_f1(val_preds, val_data)
+            val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, _ = self._cal_auc_auprc_metrics(val_preds, val_data)
 
             self.writer.add_scalars("Loss_tot", {"train": train_loss_tot, "validation": val_loss_tot}, e)
-            self.writer.add_scalars("Loss_item", {
-                "train_lpe": train_loss_lpe, 
-                "validation_lpe": val_loss_lpe,
-                "train_raw": train_loss_raw, 
-                "validation_raw": val_loss_raw,
-                "train_comb": train_loss_comb, 
-                "validation_comb": val_loss_comb,                
-                }, e)
-            self.writer.add_scalars("AUC (validation)", val_aucs, e)
-            self.writer.add_scalars("AUPRC (validation)", val_auprcs, e)
-            self.writer.add_scalars("Precision (validation)", val_precisions, e)
-            self.writer.add_scalars("F1 (validation)", val_f1s, e)
+            # self.writer.add_scalars("Loss_item", {
+            #     "train_lpe": train_loss_lpe, 
+            #     "validation_lpe": val_loss_lpe,
+            #     "train_raw": train_loss_raw, 
+            #     "validation_raw": val_loss_raw,
+            #     "train_comb": train_loss_comb, 
+            #     "validation_comb": val_loss_comb,                
+            #     }, e)
+            # self.writer.add_scalars("AUC (validation)", val_aucs, e)
+            # self.writer.add_scalars("AUPRC (validation)", val_auprcs, e)
+            # self.writer.add_scalars("Precision (validation)", val_precisions, e)
+            # self.writer.add_scalars("Recall (validation)", val_recalls, e)
+            # self.writer.add_scalars("Specificity (validation)", val_specificities, e)
+            # self.writer.add_scalars("F1 (validation)", val_f1s, e)
+            # self.writer.add_scalars("Acc (validation)", val_accs, e)
             self.writer.add_scalar("LR", self.optimizer.param_groups[0]['lr'], e)
             if val_loss_tot < best_loss:
                 self.save_model(e, "min_loss")
@@ -405,15 +277,23 @@ class TrainerCoulomb(object):
             val_preds = self._update_total_dict(val_preds, val_pred)
             val_data = self._update_total_dict(val_data, data)
         val_loss /= len(dataloader)
-        val_aucs, val_auprcs, val_precisions, val_f1s, val_nums = self._cal_auc_auprc_precision_f1(val_preds, val_data)
+        val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, thresholds = self._cal_auc_auprc_metrics(val_preds, val_data)
+
+        # self.draw_preds(val_preds, val_data, mark, thresholds)
 
         self._draw_performances(val_nums, val_aucs, "auc", mark)
         self._draw_performances(val_nums, val_auprcs, "auprc", mark)
         self._draw_performances(val_nums, val_precisions, "precision", mark)
+        self._draw_performances(val_nums, val_recalls, "recall", mark)
+        self._draw_performances(val_nums, val_specificities, "specificity", mark)
         self._draw_performances(val_nums, val_f1s, "f1", mark)
+        self._draw_performances(val_nums, val_accs, "acc", mark)
 
         avg_auc = np.mean(list(val_aucs.values()))
         avg_auprc = np.mean(list(val_auprcs.values()))
         avg_precision = np.mean(list(val_precisions.values()))
+        avg_recall = np.mean(list(val_recalls.values()))
+        avg_specificity = np.mean(list(val_specificities.values()))
         avg_f1 = np.mean(list(val_f1s.values()))
-        return val_loss, avg_auc, avg_auprc, avg_precision, avg_f1        
+        avg_acc = np.mean(list(val_accs.values()))
+        return val_loss, avg_auc, avg_auprc, avg_precision, avg_recall, avg_specificity, avg_f1, avg_acc  

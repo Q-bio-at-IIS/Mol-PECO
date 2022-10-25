@@ -17,7 +17,6 @@ from train_loader import PyrfumeData, DreamTrainData
 from test_loader import DreamTestData
 from trainer_lpe import TrainerCoulomb
 from models_lpe import GNNLPE
-# from models_lpe2 import GNNLPE2
 from tester_lpe import TesterCoulomb
 from ml_utils import *
 from dl_utils import load_pretrained_infograph
@@ -44,14 +43,9 @@ parser.add_argument("--LPE_dim", default = 32, type = int)
 parser.add_argument("--LPE_n_heads", default = 4, type = int)
 parser.add_argument("--LPE_layer", default = 2, type = int)
 
-parser.add_argument("--lambdas", default = [0.25, 0.25, 0.5], type = float, nargs = "+") ## raw, lpe, combined
-parser.add_argument("--device", default = 2, type = int)
-parser.add_argument("--model", default = "GNN", type = str)
-parser.add_argument("--out_name", default = "DREAM_EMB", type = str)
-parser.add_argument("--method", default = "mean", type = str)
-parser.add_argument("--wanted_label", default = "all")
+parser.add_argument("--lambdas", default = [0, 0.25, 0.75], type = float, nargs = "+") ## raw, lpe, combined
+parser.add_argument("--device", default = 0, type = int)
 
-# parser.add_argument("--pretrained_path", default = "../model_pretrain_by_infograph/zinc2m_aicrowd_dream_new2/lr0.001_regu1.0/drop0.1_emb32_hid16_layer8/min.ckpt")
 parser.add_argument("--pretrained_path", default = "")
 args = parser.parse_args()
 torch.cuda.set_device(args.device)
@@ -60,9 +54,7 @@ args.hid_dims = [args.hid_dim] * args.hid_layer
 args.fc_dims = [sum(args.hid_dims), 32]
 args.out_dir = os.path.join(
     args.out_dir,
-    "{}_{}_{}".format(args.lambdas[0], args.lambdas[1], args.lambdas[2]), 
-    "lr{}_dim{}".format(args.lr, args.hid_dim))
-    # "lr{}_layer{}_freq{}_lpe{}".format(args.lr, args.hid_layer, args.max_freq, args.LPE_dim))
+    "{}_{}_{}".format(args.lambdas[0], args.lambdas[1], args.lambdas[2]))
 
 train_data = PyrfumeData(args.data_dir, "pyrfume_train.xlsx")
 train_loader = DataLoader(train_data, batch_size = args.batch_size, collate_fn = train_data.collate_fn, shuffle = True)
@@ -70,19 +62,18 @@ val_data = PyrfumeData(args.data_dir, "pyrfume_val.xlsx")
 val_loader = DataLoader(val_data, batch_size = args.batch_size, collate_fn = val_data.collate_fn, shuffle = False)
 test_data = PyrfumeData(args.data_dir, "pyrfume_test.xlsx")
 test_loader = DataLoader(test_data, batch_size = args.batch_size, collate_fn = test_data.collate_fn, shuffle = False)
-if args.model == "GNN":
-    if args.gnn_matrix == "coulomb":
-        if args.coulomb_bin_step == -1:
-            bonds = ["coulomb"]
-        else:
-            bonds = []
-            for i in range(1, args.coulomb_bin_step):
-                # bonds.append("coulomb{}".format(i))
-                bonds.append("coulomb{}".format(-i))
-        model = GNNLPE(
-            args.atom_num, args.emb_dim, args.hid_dims, args.fc_dims, args.dropout, train_data.labels,
-            args.LPE_dim, args.LPE_n_heads, args.LPE_layer, args.max_freq, 
-            bonds = bonds)
+if args.gnn_matrix == "coulomb":
+    if args.coulomb_bin_step == -1:
+        bonds = ["coulomb"]
+    else:
+        bonds = []
+        for i in range(1, args.coulomb_bin_step):
+            # bonds.append("coulomb{}".format(i))
+            bonds.append("coulomb{}".format(-i))
+    model = GNNLPE(
+        args.atom_num, args.emb_dim, args.hid_dims, args.fc_dims, args.dropout, train_data.labels,
+        args.LPE_dim, args.LPE_n_heads, args.LPE_layer, args.max_freq, 
+        bonds = bonds)
 
 if args.pretrained_path != "":
     model = load_pretrained_infograph(model, args.pretrained_path)
@@ -92,14 +83,20 @@ if args.gnn_matrix == "coulomb":
 
 trainer.fit_classification()
 
-## test on the validation of AIcrowd
+## evauate on the testing set
 model.load_checkpoint(os.path.join(args.out_dir, "min_loss.ckpt"))
-val_loss, val_auc, val_auprc, val_precision, val_f1 = trainer.test("val")
-test_loss, test_auc, test_auprc, test_precision, test_f1 = trainer.test("test")
+val_loss, val_auc, val_auprc, val_precision, val_recall, val_spe, val_f1, val_acc = trainer.test("val")
+test_loss, test_auc, test_auprc, test_precision, test_recall, test_spe, test_f1, test_acc = trainer.test("test")
+
+if not os.path.exists(result_path):
+    with open(result_path, "a+") as f:
+        f.write("lambda1,lambda2,lambda2,lr,drop,emb,hid_dim,lpe_dim,hid_layer,max_freq,\
+            val_loss,val_auc,val_auprc,val_precision,val_recall,val_spe,val_f1,val_acc,\
+            test_loss,test_auc,test_auprc,test_precision,test_recall,test_spe,test_f1,test_acc\n")
 
 with open(result_path, "a+") as f:
-    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
-                args.lambdas[0], args.lambdas[1], args.lambdas[2], args.model, args.lr, args.dropout, 
+    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+                args.lambdas[0], args.lambdas[1], args.lambdas[2], args.lr, args.dropout, 
                 args.emb_dim, args.hid_dim, args.LPE_dim, args.hid_layer, args.max_freq,
-                val_loss, val_auc, val_auprc, val_precision, val_f1,
-                test_loss, test_auc, test_auprc, test_precision, test_f1))
+                val_loss, val_auc, val_auprc, val_precision, val_recall, val_spe, val_f1, val_acc,
+                test_loss, test_auc, test_auprc, test_precision, test_recall, test_spe, test_f1, test_acc))
