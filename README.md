@@ -19,8 +19,7 @@ All comes from pyrfume-data (https://github.com/pyrfume/pyrfume-data). After dat
 #### Data split
 The dataset was split by second order iterative stratification, same as Google's split method (https://arxiv.org/abs/1910.10685), to handle the imbalanced distribution of odor descriptors with train/val/test of  8/1/1.
 
-### Example
-#### Requirements
+### Requirements
 - python-3.7+
 - deepchem
 - matplotlib
@@ -33,8 +32,9 @@ The dataset was split by second order iterative stratification, same as Google's
 - sklearn
 - tensorboard
 - tqdm
+- imbalanced-learn
 
-#### Quick Start
+### Quick Start
 ```sh
 % python -m venv venv                    # create python virtual env
 % source ./venv/bin/activate             # activate venv
@@ -49,6 +49,20 @@ The dataset was split by second order iterative stratification, same as Google's
 min loss at 12: 0.62    max auc at 12: 0.58:   2%|▊                                    | 14/600 [21:44<14:48:30, 90.97s/it]]
 ...
 ```
+### Train the pure GNN models
+**Command line**
+```python train_pyrfume.py --out_dir ../pyrfume_models3_sois/coulomb_frobenius --gnn_matrix coulomb```
 
-### To do list
-Baseline models ...
+**Parameters**:
+- ```out_dir```: the output folder during training; ```../pyrfume_models3_sois/${out_name}$```, please assgin the output folder in ```${out_name}$```
+- ```gnn_matrix```: the matrix that we want to model; please choose from ```adjacent``` and ```coulomb```
+
+### Train the conventional classifier with fingerprints
+The scripts are located in folder ```baselines```.
+**Command line**
+```python run_fgs.py --fp mordreds --model knn```
+
+**Parameters**:
+- ```fp```: the fingerprints that we want to model; please choose from ```mordreds```, ```bfps```, and ```cfps```
+- ```model```: the classifier that we want to train; please choose from ```knn```, ```rf```, ```gb```, ```smote-knn```, ```smote-rf```, and ```smote-gb```; ```knn``` refers to K- Nearest Neighbor, ```rf``` refers to Random Forest, ```gb``` refers to Gradient Boosting, and ```smote``` refers to Synthetic Minority Oversampling Technique.
+
