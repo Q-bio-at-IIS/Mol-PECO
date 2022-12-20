@@ -51,10 +51,10 @@ min loss at 12: 0.62    max auc at 12: 0.58:   2%|▊                           
 ```
 ### Train the pure GNN models
 **Command line**
-```python train_pyrfume.py --out_dir ../pyrfume_models3_sois/coulomb_frobenius --gnn_matrix coulomb```
+```python train_pyrfume.py --out_dir ../pyrfume_sois_canon/coulomb_frobenius --gnn_matrix coulomb```
 
 **Parameters**:
-- ```out_dir```: the output folder during training; ```../pyrfume_models3_sois/${out_name}$```, please assgin the output folder in ```${out_name}$```
+- ```out_dir```: the output folder during training; ```../pyrfume_sois_canon/${out_name}$```, please assgin the output folder in ```${out_name}$```
 - ```gnn_matrix```: the matrix that we want to model; please choose from ```adjacent``` and ```coulomb```
 
 ### Train the conventional classifier with fingerprints
