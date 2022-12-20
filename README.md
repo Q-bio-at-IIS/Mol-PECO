@@ -9,7 +9,7 @@ This is the workspace for odor chemical recognition by laplacian graph neural ne
 
 ### Dataset
 #### Data source
-All comes from pyrfume-data (https://github.com/pyrfume/pyrfume-data). After data cleaning, there exists ```11863``` molecule-odor descriptors pairs, which is two fold higher than Google's (https://arxiv.org/abs/1910.10685) with ```~5000``` pairs. The folder of ```pyrfume_models3_sois``` mainly includes the preprocessed datasets with:
+All comes from pyrfume-data (https://github.com/pyrfume/pyrfume-data). After data cleaning, there exists ```8503``` molecule-odor descriptors pairs, which is 1.5 folds higher than Google's (https://arxiv.org/abs/1910.10685) with ```~5000``` pairs. The folder of ```pyrfume_sois_canon``` mainly includes the preprocessed datasets with:
 - Adjacent matrix
 - Coulomb matrix
 - Atom array
