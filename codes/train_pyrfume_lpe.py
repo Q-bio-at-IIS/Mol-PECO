@@ -22,8 +22,8 @@ from ml_utils import *
 from dl_utils import load_pretrained_infograph
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", default = "../pyrfume_models3_sois/dumped30_coulomb_frobenius/", type = str)
-parser.add_argument("--out_dir", default = "../pyrfume_models3_sois/GNNLPE_addHs7_dumped30_coufrobenius/", type = str)
+parser.add_argument("--data_dir", default = "../pyrfume_sois_canon/dumped30_coulomb_frobenius/", type = str)
+parser.add_argument("--out_dir", default = "../pyrfume_sois_canon/GNNLPE_addHs7_dumped30_coufrobenius/", type = str)
 parser.add_argument("--gnn_matrix", default = "coulomb") ##adjacent, coulomb, both
 parser.add_argument("--coulomb_bin_step", default = -1)
 
@@ -41,7 +41,7 @@ parser.add_argument("--lr", default = 0.01, type = float) ## learning rate of > 
 parser.add_argument("--max_freq", default = 20, type = int)
 parser.add_argument("--LPE_dim", default = 32, type = int)
 parser.add_argument("--LPE_n_heads", default = 4, type = int)
-parser.add_argument("--LPE_layer", default = 2, type = int)
+parser.add_argument("--LPE_layer", default = 5, type = int)
 
 parser.add_argument("--lambdas", default = [0, 0.25, 0.75], type = float, nargs = "+") ## raw, lpe, combined
 parser.add_argument("--device", default = 0, type = int)

@@ -17,8 +17,8 @@ from ml_utils import *
 from dl_utils import load_pretrained_infograph
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", default = "../pyrfume_models3_sois/dumped30_coulomb_frobenius/", type = str)
-parser.add_argument("--out_dir", default = "../pyrfume_models3_sois/GNN_addHs5_dumped30_frobenius/", type = str)
+parser.add_argument("--data_dir", default = "../pyrfume_sois_canon/dumped30_coulomb_frobenius/", type = str)
+parser.add_argument("--out_dir", default = "../pyrfume_sois_canon/GNN_addHs5_dumped30_frobenius/", type = str)
 parser.add_argument("--gnn_matrix", default = "coulomb") ##adjacent, coulomb, both
 parser.add_argument("--coulomb_bin_step", default = -1, type = int)
 
