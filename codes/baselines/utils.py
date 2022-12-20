@@ -197,8 +197,8 @@ class SKClassifier(object):
             self.best_clfs, self.best_aucs, self.best_params = {}, {}, {}
             for l in self.label_list:
                 self.best_aucs[l] = -1
-            for param in tqdm(range(1, 201, 2), ncols = 80):
-            # for param in tqdm([10, 20, 50, 100, 200], ncols = 80):
+            # for param in tqdm(range(1, 201, 2), ncols = 80):
+            for param in tqdm([10, 20, 50, 100, 200], ncols = 80):
                 for i, l in enumerate(self.label_list):
                     if self.method == "gb":
                         clf = GradientBoostingClassifier(n_estimators = param, random_state = 0, verbose = 0)
