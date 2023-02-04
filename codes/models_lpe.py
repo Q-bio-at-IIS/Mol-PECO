@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Date    : 2022-07-14 14:20:01
-# @Author  : Mengji Zhang (zmj_xy@sjtu.edu.cn)
-# @Link    : ${link}
+# @Date    : 2022-12-10 19:15:39
+# @Author  : mengji (zmj_xy@sjtu.edu.cn)
+# @Link    : http://example.org
 # @Version : $Id$
 
+'''
+the atom embedding is updated only by LPE, no random embedding
+'''
 import os, torch
 import numpy as np
 import torch.nn as nn
@@ -98,25 +101,6 @@ class GNNEncoder(nn.Module):
         atom_embs = F.selu(atom_embs)
         return atom_embs
 
-    def _synergistic_bonds(self, atom_embs, adjs):
-        if len(adjs) > 1:
-            cnter = 0
-            for k, v, in adjs.items():
-                if k not in self.bonds:
-                    continue
-                updated_emb = self._forward_gnn_for_bond(k, atom_embs, v)
-                if cnter == 0:
-                    sum_embs = updated_emb
-                    mul_embs = updated_emb
-                else:
-                    sum_embs += updated_emb
-                    mul_embs *= updated_emb
-                cnter += 1
-            mol_embs = sum_embs - mul_embs
-        else:
-            raise("Error in generating molecular embedding")
-        return mol_embs
-
     def _summed_bonds(self, atom_embs, adjs):
 
         updated_embs = []
@@ -130,15 +114,11 @@ class GNNEncoder(nn.Module):
         return mol_embs
 
     def forward(self, atoms, adjs, EigVecs, EigVals, mask):
-        atom_embs_lpe = self.embs_lpe(EigVecs, EigVals)
-        atom_embs_raw = self.embs(atoms)
-        atom_embs = atom_embs_lpe + atom_embs_raw - atom_embs_raw*atom_embs_lpe
+        atom_embs = self.embs_lpe(EigVecs, EigVals)
 
-        mol_embs_lpe, _ = self._forward_atom_embs(atom_embs_lpe, adjs, mask)
-        mol_embs_raw, _ = self._forward_atom_embs(atom_embs_raw, adjs, mask)
         mol_embs, loc_embs = self._forward_atom_embs(atom_embs, adjs, mask)
 
-        return mol_embs_raw, mol_embs_lpe, mol_embs, loc_embs
+        return mol_embs, loc_embs
         
     def _forward_atom_embs(self, atom_embs, adjs, mask):
         mol_embs = self._summed_bonds(atom_embs, adjs)
@@ -190,28 +170,22 @@ class GNNLPE(nn.Module):
             self.add_module(name, v)
 
     def forward_emb(self, atoms, adjs, EigVecs, EigVals, mask):
-        mol_embs_raw, mol_embs_lpe, mol_embs, _ = self.encoder(atoms, adjs, EigVecs, EigVals, mask)
+        mol_embs, _ = self.encoder(atoms, adjs, EigVecs, EigVals, mask)
         for fc in self.fc_layers:
             mol_embs = fc(mol_embs)
-            mol_embs_raw = fc(mol_embs_raw)
-            mol_embs_lpe = fc(mol_embs_lpe)
-        return mol_embs_raw, mol_embs_lpe, mol_embs        
+        return mol_embs        
 
     def forward(self, atoms, adjs, EigVecs, EigVals, mask):
-        mol_embs_raw, mol_embs_lpe, mol_embs = self.forward_emb(atoms, adjs, EigVecs, EigVals, mask)
+        mol_embs = self.forward_emb(atoms, adjs, EigVecs, EigVals, mask)
 
         preds, preds_raw, preds_lpe = {}, {}, {}
         for l in self.label_names:
             pred = self.out_layers[l](mol_embs)
             preds[l] = pred
 
-            pred_raw = self.out_layers[l](mol_embs_raw)
-            preds_raw[l] = pred_raw
-
-            pred_lpe = self.out_layers[l](mol_embs_lpe)
-            preds_lpe[l] = pred_lpe
-        return preds, preds_raw, preds_lpe
+        return preds
 
     def load_checkpoint(self, path):
         self.load_state_dict(torch.load(path))
         self.eval()
+

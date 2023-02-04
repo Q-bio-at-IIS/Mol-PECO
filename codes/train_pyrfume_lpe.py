@@ -43,7 +43,6 @@ parser.add_argument("--LPE_dim", default = 32, type = int)
 parser.add_argument("--LPE_n_heads", default = 4, type = int)
 parser.add_argument("--LPE_layer", default = 5, type = int)
 
-parser.add_argument("--lambdas", default = [0, 0.25, 0.75], type = float, nargs = "+") ## raw, lpe, combined
 parser.add_argument("--device", default = 0, type = int)
 
 parser.add_argument("--pretrained_path", default = "")
@@ -52,9 +51,7 @@ torch.cuda.set_device(args.device)
 result_path = os.path.join(args.out_dir, "results_min_loss.csv")
 args.hid_dims = [args.hid_dim] * args.hid_layer
 args.fc_dims = [sum(args.hid_dims), 32]
-args.out_dir = os.path.join(
-    args.out_dir,
-    "{}_{}_{}".format(args.lambdas[0], args.lambdas[1], args.lambdas[2]))
+
 
 train_data = PyrfumeData(args.data_dir, "pyrfume_train.xlsx")
 train_loader = DataLoader(train_data, batch_size = args.batch_size, collate_fn = train_data.collate_fn, shuffle = True)
@@ -79,7 +76,7 @@ if args.pretrained_path != "":
     model = load_pretrained_infograph(model, args.pretrained_path)
 
 if args.gnn_matrix == "coulomb":
-    trainer = TrainerCoulomb(model, train_loader, val_loader, test_loader, args.epoch, train_data.labels, args.out_dir, args.lr, args.lambdas)
+    trainer = TrainerCoulomb(model, train_loader, val_loader, test_loader, args.epoch, train_data.labels, args.out_dir, args.lr)
 
 trainer.fit_classification()
 
@@ -90,13 +87,13 @@ test_loss, test_auc, test_auprc, test_precision, test_recall, test_spe, test_f1,
 
 if not os.path.exists(result_path):
     with open(result_path, "a+") as f:
-        f.write("lambda1,lambda2,lambda2,lr,drop,emb,hid_dim,lpe_dim,hid_layer,max_freq,\
+        f.write("lr,drop,emb,hid_dim,lpe_dim,hid_layer,max_freq,\
             val_loss,val_auc,val_auprc,val_precision,val_recall,val_spe,val_f1,val_acc,\
             test_loss,test_auc,test_auprc,test_precision,test_recall,test_spe,test_f1,test_acc\n")
 
 with open(result_path, "a+") as f:
-    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
-                args.lambdas[0], args.lambdas[1], args.lambdas[2], args.lr, args.dropout, 
+    f.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(
+                args.lr, args.dropout, 
                 args.emb_dim, args.hid_dim, args.LPE_dim, args.hid_layer, args.max_freq,
                 val_loss, val_auc, val_auprc, val_precision, val_recall, val_spe, val_f1, val_acc,
                 test_loss, test_auc, test_auprc, test_precision, test_recall, test_spe, test_f1, test_acc))
