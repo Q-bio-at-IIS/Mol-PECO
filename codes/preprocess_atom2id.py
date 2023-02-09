@@ -88,29 +88,29 @@ class Preprocessor(object):
         bin_arr = bin_arr.astype("int")
         return bin_arr
 
-    def _norm_coulomb(self, data, epsilon = 1e-9): ## z-score
+    def _norm_coulomb(self, data, mol_size, epsilon = 1e-9): ## normalization in matrix-wise
+        # data = [[0,2,3],[2,0,4],[3,4,0]]
         data = np.array(data)
-        if self.cou_norm == "zscore":
-            mu = np.mean(data, axis = -1, keepdims = True)
-            sigma = np.std(data, axis = -1, keepdims = True)
-            new_data = {"coulomb": (data-mu)/(sigma + epsilon)}
-        elif self.cou_norm == "minmax":
-            min_ = np.min(data, axis = -1, keepdims = True)
-            max_ = np.max(data, axis = -1, keepdims = True)
+        ## set the diagnoal to 0
+        diag = np.diag(np.diag(data))
+        data -= diag
+        ## perform normalization
+        if self.cou_norm == "minmax":
+            min_ = np.min(data, keepdims = True)
+            max_ = np.max(data, keepdims = True)
             new_data = {"coulomb": (data - min_)/(max_ - min_ + epsilon)}
         elif self.cou_norm == "frobenius":
-            norm = np.linalg.norm(data, axis = -1, keepdims = True)
+            norm = np.linalg.norm(data, keepdims = True)
+            # print(norm)
             new_data = {"coulomb": data/(norm + epsilon)}
-        elif self.cou_norm == "binary":
-            new_data = {"coulomb": data}
-            new_data["coulomb0"] = self._binarilize(self._sigmoid(data))
-            for s in range(1, self.step_binary):
-                new_data["coulomb{}".format(s)] = self._binarilize(self._sigmoid(data + s))
-                new_data["coulomb{}".format(-s)] = self._binarilize(self._sigmoid(data - s))
+            # print(new_data["coulomb"][:mol_size,:mol_size])
         elif self.cou_norm == "none":
             new_data = {"coulomb": data}
         else:
             raise("normalization of coulomb is {}, which is not implemented".format(self.method))
+        if ~self.check_symmetric(new_data["coulomb"][:mol_size,:mol_size]):
+            print(new_data["coulomb"][:mol_size,:mol_size])
+            print("\n\n\n")
         return new_data
 
     def _get_features(self, mol):
