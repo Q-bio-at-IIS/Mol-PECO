@@ -1,34 +1,117 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# @Date    : 2022-12-10 19:19:44
+# @Date    : 2022-11-16 15:53:25
 # @Author  : mengji (zmj_xy@sjtu.edu.cn)
 # @Link    : http://example.org
 # @Version : $Id$
-
 import os, torch
 import numpy as np
-import pandas as pd
-import seaborn as sns
-import torch.optim as optim
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 from tqdm import tqdm
-from scipy.stats import pearsonr
+from sklearn import metrics
+from torch import nn, optim
+from matplotlib import pyplot as plt
+from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.tensorboard import SummaryWriter
-from sklearn import metrics
-from matplotlib import pyplot as plt
 
-import matplotlib.pylab as pylab
-font = {"axes.labelsize": 16, "xtick.labelsize": 16, "ytick.labelsize": 16}
-pylab.rcParams.update(font)
+class MLP(nn.Module):
+    """docstring for ClassName"""
+    def __init__(
+        self, in_dim, fc_dims, drop_rate, label_names):
+        super(MLP, self).__init__()
+        self.label_names = label_names
 
+        self.fc_layers = nn.ModuleList()
+        in_dims = [in_dim] + fc_dims
+        out_dims = fc_dims
+        for in_dim, out_dim in zip(in_dims, out_dims):
+            fc_layer = nn.Sequential(
+                nn.Linear(in_dim, out_dim),
+                nn.ReLU(),
+                nn.BatchNorm1d(out_dim),
+                nn.Dropout(drop_rate)
+                )
+            self.fc_layers.append(fc_layer)
 
-class TrainerCoulomb(object):
-    """docstring for TrainerCoulomb"""
-    def __init__(self, model, train_loader, val_loader, test_loader, epoch, labels, out_dir, lr, lambdas):
-        super(TrainerCoulomb, self).__init__()
+        self.out_layers = {}
+        for l in label_names:
+            out_layer = nn.Linear(fc_dims[-1], 1)
+            self.out_layers[l] = out_layer
+        self._add_modules(self.out_layers, "fc")
+
+    def _add_modules(self, layers, n):
+        ##add modules
+        modules = {}
+        modules.update(layers)
+        for k, v in modules.items():
+            name = "{}_{}".format(n, k)
+            self.add_module(name, v)      
+
+    def forward(self, mol_embs):
+        for fc in self.fc_layers:
+            mol_embs = fc(mol_embs)
+
+        preds = {}
+        for l in self.label_names:
+            pred = self.out_layers[l](mol_embs)
+            preds[l] = pred
+        return preds
+
+    def load_checkpoint(self, path):
+        self.load_state_dict(torch.load(path))
+        self.eval()
+
+class EmbData(Dataset):
+    """docstring for EmbData"""
+    def __init__(self, xs, ys, labels):
+        super(EmbData, self).__init__()
+        self.xs = xs
+        self.ys = ys
+        self.labels = labels
+        self.label_weights = {}
+        for i, l in enumerate(self.labels):
+            cnt = 0
+            this_ys = ys[:, i]
+            ratio = sum(this_ys)/len(this_ys)
+            weight = 1 - ratio
+            self.label_weights[l] = weight
+
+    def __len__(self):
+        return len(self.ys)
+
+    def __getitem__(self, idx):
+        data = []
+        data.extend(list(self.xs[idx]))
+        data.extend(list(self.ys[idx]))
+        return data
+
+    def _pro_label(self, data, start_idx):
+        mini_data = data[:, start_idx:start_idx + 1]
+        mini_data = mini_data.astype(float)
+        nan_mask = np.isnan(mini_data)
+        mini_data[nan_mask] = 0
+
+        zero_mask = mini_data == 0
+        weights = np.zeros_like(mini_data)
+        weights[zero_mask] = (1 - np.sum(zero_mask)/len(zero_mask))
+        weights[~zero_mask] = np.sum(zero_mask)/len(zero_mask)
+        return mini_data, weights
+
+    def collate_fn(self, data):
+        data = np.array(data)
+        xs, ys = data[:, :-len(self.labels)], data[:, -len(self.labels):]
+        data_dict = {}
+        for i, l in enumerate(self.labels):
+            data_dict[l], data_dict["{}_weight".format(l)] = self._pro_label(ys, i)
+
+        data_dict["xs"] = xs
+        data_dict["label_weights"] = self.label_weights
+        return data_dict
+
+class Trainer(object):
+    """docstring for Trainer"""
+    def __init__(self, model, train_loader, val_loader, test_loader, epoch, labels, out_dir, lr):
+        super(Trainer, self).__init__()
         self.model = model.cuda()
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -36,18 +119,8 @@ class TrainerCoulomb(object):
         self.epoch = epoch
         self.labels_list = labels
         self.out_dir = out_dir
-        self.lambdas = lambdas
-        # self.optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr = lr)
-        lpe_params = list(map(id, self.model.encoder.embs_lpe.parameters()))
-        base_params = filter(lambda p: id(p) not in lpe_params, self.model.parameters())
-        self.optimizer = optim.Adam([
-            {"params": self.model.encoder.embs_lpe.parameters(), lr:lr},
-            {"params": base_params, lr:1.}
-            ])
-
-
+        self.optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.model.parameters()), lr = lr)
         self.scheduler = OneCycleLR(self.optimizer, max_lr = lr/10., steps_per_epoch = len(self.train_loader), epochs = self.epoch)
-        # self.criterion = nn.L1Loss(reduction = "none")
         self.criterion = nn.BCELoss(reduction = "none")
         self.writer = SummaryWriter(os.path.join(out_dir, "logging"))
         os.makedirs(self.out_dir, exist_ok = True)
@@ -60,13 +133,7 @@ class TrainerCoulomb(object):
             return torch.BoolTensor(x).cuda()
         else:
             return torch.FloatTensor(x).cuda()
-
-    def _to_var_dict(self, x):
-        new_dict = {}
-        for k, v in x.items():
-            new_dict[k] = self._to_var(v, t = "float")
-        return new_dict
-
+            
     def _to_np(self, x):
         if torch.is_tensor(x):
             return x.detach().cpu().numpy().squeeze()
@@ -78,7 +145,6 @@ class TrainerCoulomb(object):
         for l in self.labels_list:
             weight = self._to_var(labels["{}_weight".format(l)].squeeze())
             pred, label = preds[l], self._to_var(labels[l])
-            # print(l, torch.max(pred), torch.min(pred), pred)
             pred = torch.sigmoid(pred)
             mae = torch.mean(self.criterion(pred, label)*weight)
             log = torch.abs(torch.log(pred + epsilon) - torch.log(label + epsilon))
@@ -90,35 +156,11 @@ class TrainerCoulomb(object):
 
         return losses/len(self.labels_list)
 
-    def draw_preds(self, preds, labels, mark, thresholds):
-        
-        out_dir = os.path.join(self.out_dir, mark)
-        os.makedirs(out_dir, exist_ok = True)
-        for l in self.labels_list:
-            if l not in thresholds:
-                continue
-            xs = np.arange(len(preds[l]))
-            df = pd.DataFrame()
-            df["no"] = xs
-            df["pred"] = preds[l] >= thresholds[l]
-            df["label"] = labels[l]
-            fig = plt.figure()
-            sns.scatterplot(data = df, x = "no", y = "pred", hue = "label")
-            plt.savefig(os.path.join(out_dir, "{}.png".format(l)), bbox_inches = "tight")
-
     def _cal_auc_auprc_metrics(self, preds, labels):
-        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds = {}, {}, {}, {}, {}, {}, {}, {}, {}
         for l in tqdm(self.labels_list, ncols = 80):
             if sum(labels[l]) == 0:
                 continue
-            ## dump the preds
-            out_dir = os.path.join(self.out_dir, "detailed_preds")
-            os.makedirs(out_dir, exist_ok = True)
-            out_df = pd.DataFrame()
-            out_df["label"] = labels[l]
-            out_df["pred"] = preds[l]
-            out_df.to_csv(os.path.join(out_dir, "{}.csv".format(l)))
-
             auc = metrics.roc_auc_score(labels[l], preds[l])
             auprc = metrics.average_precision_score(labels[l], preds[l])
 
@@ -127,7 +169,6 @@ class TrainerCoulomb(object):
 
             aucs[l] = auc
             nums[l] = sum(labels[l])/len(labels[l])
-            pred_neg_nums[l] = sum(~(preds[l] >= threshold))/len(labels[l])
             auprcs[l] = auprc
             precisions[l] = precision
             recalls[l] = recall
@@ -136,7 +177,7 @@ class TrainerCoulomb(object):
             accs[l] = acc
             thresholds[l] = threshold
 
-        return aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds
+        return aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds
 
     def _cal_youden(self, preds, labels):
         fpr, tpr, thresholds = metrics.roc_curve(labels, preds)
@@ -160,51 +201,23 @@ class TrainerCoulomb(object):
         acc = metrics.balanced_accuracy_score(labels, preds)
         return precision, recall, specificity, f1, acc
 
-    def _data_to_var(self, data):
-        atom_feats, cou_feats, mol_masks = data["atom_feat"], data["coulomb_feat"], data["mol_mask"]
-        eigval_coulomb, eigvec_coulomb = data["eigval_coulomb"], data["eigvec_coulomb"]
-
-        atom_feats = self._to_var(atom_feats, t = "int")
-        cou_feats = self._to_var_dict(cou_feats)
-        mol_masks = self._to_var(mol_masks, t = "bool")
-        eigval_coulomb = self._to_var(eigval_coulomb, t = "float")
-        eigvec_coulomb = self._to_var(eigvec_coulomb, t = "float")
-        return atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb
-
-    def _check_input(self, data):
-        atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb = data
-        # print(torch.sum(torch.isnan(atom_feats)))
-        # print(torch.sum(torch.isnan(cou_feats["coulomb"])))
-        # print(torch.sum(torch.isnan(mol_masks)))
-        # print(torch.sum(torch.isnan(eigval_coulomb)))
-        # print(torch.sum(torch.isnan(eigvec_coulomb)))
-
     def train_on_step(self, data):
-        atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb = self._data_to_var(data)
-        self._check_input((atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb))
+        xs = data["xs"]
+        xs = self._to_var(xs, t = "float")
         self.optimizer.zero_grad()
-        # print(atom_feats.shape)
-        preds = self.model(atom_feats, cou_feats, eigvec_coulomb, eigval_coulomb, mol_masks)
-        total_loss = self._call_loss_log(preds, data)
-        # total_loss.register_hook(lambda grad: print(grad))
-        total_loss.backward()
+        preds = self.model(xs)
+        loss = self._call_loss_log(preds, data)
+        loss.backward()
         self.optimizer.step()
         self.scheduler.step()
-        # for n, p in self.model.named_parameters():
-        #     try:
-        #         gradient, *_ = p.grad.data
-        #         print(f"Gradient of {n} w.r.t to L: {gradient}")
-        #     except Exception as e:
-        #         pass
-        # print("\n")
-
-        return total_loss.item(), preds
+        return loss.item()
 
     def val_on_step(self, data):
-        atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb = self._data_to_var(data)
-        preds = self.model(atom_feats, cou_feats, eigvec_coulomb, eigval_coulomb, mol_masks)
-        total_loss = self._call_loss_log(preds, data)
-        return total_loss.item(), preds
+        xs = data["xs"]
+        xs = self._to_var(xs, t = "float")
+        preds = self.model(xs)
+        loss = self._call_loss_log(preds, data)
+        return loss.item(), preds
 
     def save_model(self, epoch, name):
         torch.save(self.model.state_dict(), os.path.join(self.out_dir, "{}.ckpt".format(name)))
@@ -229,9 +242,9 @@ class TrainerCoulomb(object):
 
             self.model.train()
             for data in self.train_loader:
-                if len(data["atom_feat"]) == 1:
+                if len(data["xs"]) == 1:
                     continue
-                total_loss, preds = self.train_on_step(data)
+                total_loss = self.train_on_step(data)
                 train_loss_tot += total_loss
             train_loss_tot /= len(self.train_loader)
 
@@ -243,8 +256,7 @@ class TrainerCoulomb(object):
                 val_data = self._update_total_dict(val_data, data)
             val_loss_tot /= len(self.val_loader)
 
-
-            val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, _, _ = self._cal_auc_auprc_metrics(val_preds, val_data)
+            val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, _ = self._cal_auc_auprc_metrics(val_preds, val_data)
 
             self.writer.add_scalars("Loss_tot", {"train": train_loss_tot, "validation": val_loss_tot}, e)
             self.writer.add_scalars("AUC (validation)", val_aucs, e)
@@ -291,9 +303,7 @@ class TrainerCoulomb(object):
             val_preds = self._update_total_dict(val_preds, val_pred)
             val_data = self._update_total_dict(val_data, data)
         val_loss /= len(dataloader)
-        val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, pred_neg_nums, thresholds = self._cal_auc_auprc_metrics(val_preds, val_data)
-
-        # self.draw_preds(val_preds, val_data, mark, thresholds)
+        val_aucs, val_auprcs, val_precisions, val_recalls, val_specificities, val_f1s, val_accs, val_nums, thresholds = self._cal_auc_auprc_metrics(val_preds, val_data)
 
         self._draw_performances(val_nums, val_aucs, "auc", mark)
         self._draw_performances(val_nums, val_auprcs, "auprc", mark)
@@ -310,58 +320,5 @@ class TrainerCoulomb(object):
         avg_specificity = np.mean(list(val_specificities.values()))
         avg_f1 = np.mean(list(val_f1s.values()))
         avg_acc = np.mean(list(val_accs.values()))
-        pos_num_df = pd.DataFrame.from_dict(val_nums, orient = "index", columns = ["pos_ratio"]).reset_index().rename(columns = {"index": "odor"})
-        pred_neg_df = pd.DataFrame.from_dict(pred_neg_nums, orient = "index", columns = ["pred_neg_ratio"]).reset_index().rename(columns = {"index": "odor"})
-        merged = pos_num_df.merge(pred_neg_df, how = "left", on = "odor")
-        merged.to_excel(os.path.join(self.out_dir, "pred_summary.xlsx"), index = False)
         return val_loss, avg_auc, avg_auprc, avg_precision, avg_recall, avg_specificity, avg_f1, avg_acc  
-
-    def _sigmoid_np(self, x):
-        x = np.array(x)
-        return 1 / (1 + np.exp(-x))
-
-    def _minmax_np(self, x):
-        min_ = np.min(x)
-        max_ = np.max(x)
-        return (x-min_) / (max_ - min_)
-
-    def save_pred(self, mark = "train", which_emb = "beforeNN"):
-        os.makedirs(os.path.join(self.out_dir, "pred_emb"), exist_ok = True)
-        if mark == "test":
-            dataloader = self.test_loader
-        elif mark == "val":
-            dataloader = self.val_loader
-        elif mark == "train":
-            dataloader = self.train_loader
-        val_data, val_preds, val_embs, val_smiles = {}, {}, [], []
-        self.model.eval()
-        for data in tqdm(dataloader, ncols = 80):
-            atom_feats, cou_feats, mol_masks, eigval_coulomb, eigvec_coulomb = self._data_to_var(data)
-            if which_emb == "afterNN":
-                mol_embs = self.model.forward_emb(atom_feats, cou_feats, eigvec_coulomb, eigval_coulomb, mol_masks)
-            elif which_emb == "beforeNN":
-                mol_embs, _ = self.model.encoder(atom_feats, cou_feats, eigvec_coulomb, eigval_coulomb, mol_masks)
-
-            preds = self.model(atom_feats, cou_feats, eigvec_coulomb, eigval_coulomb, mol_masks)
-
-            if len(atom_feats) == 1:
-                val_embs.append(self._to_np(mol_embs))
-            else:
-                val_embs += self._to_np(mol_embs).tolist()
-
-            val_data = self._update_total_dict(val_data, data)
-            val_preds = self._update_total_dict(val_preds, preds)
-            val_smiles.extend(list(data["smiles"]))
-        val_embs = np.array(val_embs)
-        df = pd.DataFrame(val_embs, columns = ["emb{}".format(i) for i in range(val_embs.shape[1])])
-        for l in self.labels_list:
-            if l in val_data:
-                true = val_data[l]
-                df[l] = true
-                # df["{}_pred".format(l)] = self._minmax_np(val_preds[l])
-                df["{}_pred".format(l)] = self._sigmoid_np(val_preds[l])
-        df["smiles"] = val_smiles
-        os.makedirs(os.path.join(self.out_dir, "pred_emb_score_sigmoid"), exist_ok = True)
-        df.to_csv(os.path.join(self.out_dir, "pred_emb_score_sigmoid", "{}_{}.csv".format(mark, which_emb)), index = False)
-
 

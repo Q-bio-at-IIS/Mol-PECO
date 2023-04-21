@@ -13,8 +13,6 @@ from scipy.stats import pearsonr
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from matplotlib import pyplot as plt
-from train_loader import DreamTrainData
-from test_loader import DreamTestData
 
 
 # test with random forest

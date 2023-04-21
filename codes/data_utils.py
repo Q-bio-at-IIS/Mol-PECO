@@ -188,11 +188,12 @@ def draw_pos_ratio(mapper, out_dir, mark, out_name, log = False):
     for k, v in sorted_mapper:
         if log:
             v = np.log(v)
-        ax.bar(cnter, v, label = k)
+        ax.bar(cnter, v, label = k, width = 1)
         cnter += 1
+    # ax.bar(cnter-1, v, label = k, width = 1, color = "black")
     print(k, v)
     ax.set_xlabel(out_name)
-    ax.set_ylabel("pos ratio")
+    ax.set_ylabel("pos num")
     # ax.set_ylim(0, 1)
     ax.set_xticks([])
     plt.savefig(os.path.join(out_dir, "{}_{}.png".format(mark, out_name)), bbox_inches = "tight", dpi = 300)
@@ -413,8 +414,8 @@ if __name__ == '__main__':
     # split_dataset_train_val_test(data_path, out_dir, name)
     # extract_labels(data_path, out_dir, name)
 
-    data_path = "../data_pyrfume/10db30_total.xlsx"
-    label_path = "../data_pyrfume/10db30_labels.xlsx"
-    out_dir = "../data_pyrfume/"
+    data_path = "../data_pyrfume/canon_smiles/10db30_total.xlsx"
+    label_path = "../data_pyrfume/canon_smiles/10db30_labels.xlsx"
+    out_dir = "../data_pyrfume/canon_smiles"
     name = "10db30"
     split_dataset_train_val_test_SOIS(data_path, label_path, out_dir, name)

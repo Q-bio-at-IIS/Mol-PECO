@@ -83,7 +83,7 @@ class FPDumperLoader(object):
 
 
 if __name__ == '__main__':
-    data_dir = "../pyrfume_models3_sois/dumped30_coulomb_frobenius/"
+    data_dir = "../../pyrfume_sois_canon/dumped30_coulomb_frobenius/"
     dumper = FPDumperLoader(data_dir)
     dumper.dump()
 

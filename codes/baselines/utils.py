@@ -43,7 +43,16 @@ class DataPreprocess(object):
         self.test_df = pd.read_excel(os.path.join(self.data_dir, "pyrfume_test.xlsx"))
 
     def _read_fps(self):
-        self.fps = pickle.load(open(os.path.join(self.data_dir, "{}.pkl".format(self.fp)), "rb"))
+        if self.fp != "deepodor":
+            self.fps = pickle.load(open(os.path.join(self.data_dir, "{}.pkl".format(self.fp)), "rb"))
+        else:
+            train_embs = self._read_embs("train.csv")
+            val_embs = self._read_embs("val.csv")
+            test_embs = self._read_embs("test.csv")
+            self.fps = {}
+            self.fps.update(train_embs)
+            self.fps.update(val_embs)
+            self.fps.update(test_embs)
 
     def _read_embs(self, data_name):
         embs = pd.read_csv(os.path.join(self.data_dir, data_name))
@@ -104,7 +113,7 @@ class SKClassifier(object):
         os.makedirs(self.out_dir, exist_ok = True)
 
     def _cal_auc_auprc_metrics(self, preds, labels):
-        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds = {}, {}, {}, {}, {}, {}, {}, {}, {}
+        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         
         for i, l in enumerate(self.label_list):
             one_labels = labels[:, i]
@@ -119,6 +128,7 @@ class SKClassifier(object):
 
             aucs[l] = auc
             nums[l] = sum(one_labels)/len(one_labels)
+            pred_neg_nums[l] = sum(~(one_preds >= threshold))/len(one_labels)
             auprcs[l] = auprc
             precisions[l] = precision
             recalls[l] = recall
@@ -127,7 +137,7 @@ class SKClassifier(object):
             accs[l] = acc
             thresholds[l] = threshold
 
-        return aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds
+        return aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds
 
 
     def _cal_youden(self, preds, labels):
@@ -157,7 +167,7 @@ class SKClassifier(object):
     def _fit_clf_multilabel(self, clf):
         clf.fit(self.train[0], self.train[1])
         val_preds = clf.predict(self.val[0])
-        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds = self._cal_auc_auprc_metrics(val_preds, self.val[1])
+        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds = self._cal_auc_auprc_metrics(val_preds, self.val[1])
         avg_auc = np.mean(list(aucs.values()))
         print(list(aucs.values()))
         return avg_auc, clf
@@ -174,6 +184,25 @@ class SKClassifier(object):
             return auc, clf        
 
     def run(self):
+        # if self.method in ["rf", "knn"]:
+        #     self.best_clf, self.best_auc, self.best_param = None, -1, None
+        #     # for param in range(1, 201, 2):
+        #     for param in range(1, 3, 2):
+        #         if self.method == "rf":
+        #             clf = RandomForestClassifier(random_state = 0, min_samples_leaf = param, verbose = 1, n_jobs = -1)
+        #         elif self.method == "knn":
+        #             m = KNeighborsClassifier(n_neighbors = param, n_jobs = 16)
+        #             resample = SMOTE()
+        #             #Define pipeline
+        #             clf = Pipeline(steps=[('r', resample), ('m', m)])
+        #         avg_auc, clf = self._fit_clf_multilabel(clf)
+        #         print(param, avg_auc)
+        #         if avg_auc > self.best_auc:
+        #             self.best_clf = clf
+        #             self.best_auc = avg_auc
+        #             self.best_param = param
+        #             # print(param, self.best_auc)
+
         if self.method == "smote-svm":
             self.best_clfs, self.best_aucs, self.best_params = {}, {}, {}
             for l in self.label_list:
@@ -198,7 +227,8 @@ class SKClassifier(object):
             for l in self.label_list:
                 self.best_aucs[l] = -1
             # for param in tqdm(range(1, 201, 2), ncols = 80):
-            for param in tqdm([10, 20, 50, 100, 200], ncols = 80):
+            for param in tqdm(range(1, 101, 2), ncols = 80):
+            # for param in tqdm([10, 20, 50, 100, 200], ncols = 80):
                 for i, l in enumerate(self.label_list):
                     if self.method == "gb":
                         clf = GradientBoostingClassifier(n_estimators = param, random_state = 0, verbose = 0)
@@ -261,7 +291,7 @@ class SKClassifier(object):
             test_preds = np.array(test_preds).transpose()
             print(test_preds.shape)
         self.draw_preds(test_preds, data[1], mark)
-        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, thresholds = self._cal_auc_auprc_metrics(test_preds, data[1])
+        aucs, auprcs, precisions, recalls, specificities, f1s, accs, nums, pred_neg_nums, thresholds = self._cal_auc_auprc_metrics(test_preds, data[1])
    
         self._draw_performances(nums, aucs, "auc", mark)
         self._draw_performances(nums, auprcs, "auprc", mark)
@@ -275,6 +305,10 @@ class SKClassifier(object):
         f1 = np.mean(list(f1s.values()))
         acc = np.mean(list(accs.values()))
 
+        pos_num_df = pd.DataFrame.from_dict(nums, orient = "index", columns = ["pos_ratio"]).reset_index().rename(columns = {"index": "odor"})
+        pred_neg_df = pd.DataFrame.from_dict(pred_neg_nums, orient = "index", columns = ["pred_neg_ratio"]).reset_index().rename(columns = {"index": "odor"})
+        merged = pos_num_df.merge(pred_neg_df, how = "left", on = "odor")
+        merged.to_excel(os.path.join(self.out_dir, "pred_summary.xlsx"), index = False)
         return auc, auprc, precision, recall, specificity, f1, acc, best_param
 
         

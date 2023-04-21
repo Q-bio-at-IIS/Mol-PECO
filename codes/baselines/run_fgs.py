@@ -11,9 +11,10 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--fp", default = "mordreds", type = str) ##bfps, cfps, mordreds
-parser.add_argument("--data_dir", default = "../../pyrfume_models3_sois/dumped30_coulomb_frobenius/", type = str)
-parser.add_argument("--out_dir", default = "../../pyrfume_models3_sois/baselines_bin_clf/", type = str)
-parser.add_argument("--model", default = "knn", type = str) ##rf, knn, svm, gb
+# parser.add_argument("--data_dir", default = "../../pyrfume_models3_sois/GNNLPE_addHs7_dumped30_coufrobenius/0.0_0.25_0.75/lr0.01_dim16/pred_emb_afterNN/", type = str)
+parser.add_argument("--data_dir", default = "../../pyrfume_sois_canon/dumped30_coulomb_frobenius/", type = str)
+parser.add_argument("--out_dir", default = "../../pyrfume_sois_canon/baselines_clf_50params/", type = str)
+parser.add_argument("--model", default = "smote-rf", type = str) ##rf, knn, svm, gb
 args = parser.parse_args()
 
 dp = DataPreprocess(args.data_dir, args.fp)

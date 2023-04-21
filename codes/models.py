@@ -20,10 +20,14 @@ def weight_init(m):
         m.bias.data.fill_(0.01)
 
 class GNNEncoder(nn.Module):
-    def __init__(self, atom_num, emb_dim, hid_dims, bonds = [0, 1, 2, 3], gnn_name = "gcn"):
+    def __init__(self, atom_num, emb_dim, hid_dims, bonds = [0, 1, 2, 3], gnn_name = "gcn", emb_method = "random"):
         super(GNNEncoder, self).__init__()
-        print(bonds)
-        self.embs = nn.Embedding(atom_num, emb_dim)
+        self.emb_method = emb_method
+        self.atom_num = atom_num
+        if self.emb_method == "random":
+            self.embs = nn.Embedding(atom_num, emb_dim)
+        else:
+            emb_dim = atom_num
         self.bonds = bonds
         self.hid_dims = hid_dims
         self.gnn_name = gnn_name
@@ -97,7 +101,10 @@ class GNNEncoder(nn.Module):
         return mol_embs
 
     def forward(self, x, adjs, mask):
-        atom_embs = self.embs(x)
+        if self.emb_method == "random":
+            atom_embs = self.embs(x)
+        else:
+            atom_embs = F.one_hot(x, num_classes = self.atom_num).float()
         
         mol_embs = self._summed_bonds(atom_embs, adjs)
         # mol_embs = self._synergistic_bonds(atom_embs, adjs)
@@ -117,11 +124,11 @@ class GNNEncoder(nn.Module):
 
 class GNN(nn.Module):
     """docstring for ClassName"""
-    def __init__(self, atom_num, emb_dim, hid_dims, fc_dims, drop_rate, label_names, bonds = [0, 1, 2, 3], gnn_name = "gcn"):
+    def __init__(self, atom_num, emb_dim, hid_dims, fc_dims, drop_rate, label_names, bonds = [0, 1, 2, 3], gnn_name = "gcn", emb_method = "random"):
         super(GNN, self).__init__()
         self.label_names = label_names
 
-        self.encoder = GNNEncoder(atom_num, emb_dim, hid_dims, bonds, gnn_name = gnn_name)
+        self.encoder = GNNEncoder(atom_num, emb_dim, hid_dims, bonds, gnn_name = gnn_name, emb_method = emb_method)
 
         self.fc_layers = nn.ModuleList()
         in_dims = [sum(hid_dims)] + fc_dims
