@@ -1,4 +1,4 @@
-# chemLGNN
+# Mol-PECO
 
 This is the workspace for odor chemical recognition by laplacian graph neural network.
 
