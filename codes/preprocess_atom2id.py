@@ -268,23 +268,6 @@ class DataDumperLoader(object):
         coulomb_dict = pickle.load(open(os.path.join(self.data_dir, "coulomb_dict.pkl"), "rb"))
         return atom_dict, adj_dict, coulomb_dict
 
-class DREAMAICROWDDumper(DataDumperLoader):
-    def __init__(self, data_dir, max_atoms = 28, max_size = 28, atom2id_path = ""):
-        super(DREAMAICROWDDumper, self).__init__(data_dir, max_atoms, max_size, atom2id_path)
-
-    def read_smiles_list(self):
-        smiles_list = pd.read_csv(os.path.join(self.data_dir, "cid2smiles.txt"), header = None)[1].values.squeeze().tolist()
-        smiles_set = set(smiles_list)
-        self.smiles_list = sorted(list(smiles_set))
-
-        train_path = os.path.join(self.data_dir, "train.csv")
-        test_path = os.path.join(self.data_dir, "round-3-supplementary-training-data.csv")
-        train_df = pd.read_csv(train_path)
-        test_df = pd.read_csv(test_path)
-        train_smiles, test_smiles = train_df["SMILES"].values.squeeze().tolist(), test_df["SMILES"].values.squeeze().tolist()
-        self.smiles_list = self.smiles_list + sorted([t.strip() for t in train_smiles + test_smiles])
-        print("smiles: {}".format(len(self.smiles_list)))
-
 class PyrfumeDumper(DataDumperLoader):
     def __init__(self, data_dir, cou_norm = "frobenius", max_atoms = 28, max_size = 28, atom2id_path = "", laplace = False, freq = 10, add_Hs = False, self_loop = False, step_binary = 10):
         super(PyrfumeDumper, self).__init__(data_dir, cou_norm, max_atoms, max_size, atom2id_path, laplace, freq, add_Hs, self_loop, step_binary)
