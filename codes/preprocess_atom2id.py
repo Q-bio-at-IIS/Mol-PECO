@@ -285,26 +285,9 @@ class DREAMAICROWDDumper(DataDumperLoader):
         self.smiles_list = self.smiles_list + sorted([t.strip() for t in train_smiles + test_smiles])
         print("smiles: {}".format(len(self.smiles_list)))
 
-class DREAMGoodScentsDumper(DataDumperLoader):
-    def __init__(self, data_dir, cou_norm = "frobenius", max_atoms = 28, max_size = 28, atom2id_path = "", laplace = False, freq = 10, add_Hs = False, self_loop = False):
-        super(DREAMGoodScentsDumper, self).__init__(data_dir, cou_norm, max_atoms, max_size, atom2id_path, laplace, freq, add_Hs, self_loop)
-
-    def read_smiles_list(self):
-        smiles_list = pd.read_csv(os.path.join(self.data_dir, "cid2smiles.txt"), header = None)[1].values.squeeze().tolist()
-        smiles_set = set(smiles_list)
-        self.smiles_list = sorted(list(smiles_set))
-
-        train_path = os.path.join(self.data_dir, "goodscents_train.xlsx")
-        test_path = os.path.join(self.data_dir, "goodscents_test.xlsx")
-        train_df = pd.read_excel(train_path)
-        test_df = pd.read_excel(test_path)
-        train_smiles, test_smiles = train_df["smiles"].values.squeeze().tolist(), test_df["smiles"].values.squeeze().tolist()
-        self.smiles_list = self.smiles_list + sorted([t.strip() for t in train_smiles + test_smiles])
-        print("smiles: {}".format(len(self.smiles_list)))
-
-class DREAMPyrfumeDumper(DataDumperLoader):
+class PyrfumeDumper(DataDumperLoader):
     def __init__(self, data_dir, cou_norm = "frobenius", max_atoms = 28, max_size = 28, atom2id_path = "", laplace = False, freq = 10, add_Hs = False, self_loop = False, step_binary = 10):
-        super(DREAMPyrfumeDumper, self).__init__(data_dir, cou_norm, max_atoms, max_size, atom2id_path, laplace, freq, add_Hs, self_loop, step_binary)
+        super(PyrfumeDumper, self).__init__(data_dir, cou_norm, max_atoms, max_size, atom2id_path, laplace, freq, add_Hs, self_loop, step_binary)
 
     def read_smiles_list(self):
         smiles_list = pd.read_csv(os.path.join(self.data_dir, "cid2smiles.txt"), header = None)[1].values.squeeze().tolist()
@@ -329,60 +312,7 @@ class DREAMPyrfumeDumper(DataDumperLoader):
         print("smiles: {}".format(len(self.smiles_list)))
 
 if __name__ == '__main__':
-    # data_dir = "../data_DREAM/"
-    # dumper = DREAMDumper(data_dir, max_atoms = 28, max_size = 28)
-    # dumper.dump()
-    # atom_dict, adj_dict = dumper.load()
-    # atom_sets = set()
-    # for k, v in atom_dict.items():
-    #     print(k, v)
-    #     break     
-
-    # data_dir = "../data_AIcrowd/"
-    # dumper = AICROWDDumper(data_dir, max_atoms = 28, max_size = 28)
-    # dumper.dump()
-    # atom_dict, adj_dict = dumper.load()
-    # mol_sizes = [len(t) for t in atom_dict.values()]
-    # print(max(mol_sizes), np.percentile(mol_sizes, 95))
-    # atom_sets = set()
-    # for k, v in atom_dict.items():
-    #     print(k, v)
-    #     break    
-
-    # data_dir = "../dumped_dream_aicrowd_assign_atom2id__/"
-    # atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream/atom2id.txt"
-    # dumper = DREAMAICROWDDumper(data_dir, max_atoms = 28, max_size = 28, atom2id_path = atom2id_path)
-    # dumper.dump()
-    # atom_dict, adj_dict = dumper.load()
-    # mol_sizes = [len(t) for t in atom_dict.values()]
-    # print(max(mol_sizes), np.percentile(mol_sizes, 95))
-    # atom_sets = set()
-    # for k, v in atom_dict.items():
-    #     if "Ca" in k:
-    #         print(k, v)
-    
-    # data_dir = "../dumped_dream_goodscents_assign_atom2id/"
-    # atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream/atom2id.txt"
-    # dumper = DREAMGoodScentsDumper(data_dir, max_atoms = 28, max_size = 28, atom2id_path = atom2id_path)
-    # dumper.dump()    
-
-    # data_dir = "../dumped_dream_GS_assign_atom2id_addHs_delete_invalid_coulomb_minmax/"
-    # atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream_addHs/atom2id.txt"
-    # dumper = DREAMGoodScentsDumper(data_dir, cou_norm = "minmax", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
-    # dumper.dump()    
-    # atom_dict, adj_dict, coulomb_dict = dumper.load()
-    # for k, v in coulomb_dict.items():
-    #     print(k)
-    #     print(v)
-    #     break
-
-
-    # data_dir = "../dream_pyrfume_models2/dumped30_coulomb_bin20/"
-    # atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream_addHs/atom2id.txt"
-    # dumper = DREAMPyrfumeDumper(data_dir, step_binary = 20, cou_norm = "binary", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
-    # dumper.dump()
-
-    data_dir = "../pyrfume_can_matNor7/CM_m_/"
-    atom2id_path = "../data_pretrain/zinc2m_aicrowd_dream_addHs/atom2id.txt"
-    dumper = DREAMPyrfumeDumper(data_dir, step_binary = 20, cou_norm = "minmax", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
+    data_dir = "../preprocessed/CM_frobenius/"
+    atom2id_path = "../pyrfume_sois_canon/atom2id.txt"
+    dumper = PyrfumeDumper(data_dir, step_binary = 20, cou_norm = "minmax", max_atoms = 62, max_size = 62, atom2id_path = atom2id_path, add_Hs = True, freq = 20)
     dumper.dump()
