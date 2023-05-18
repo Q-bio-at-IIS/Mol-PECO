@@ -1,11 +1,12 @@
 # Mol-PECO
-
-This is the workspace for odor chemical recognition by laplacian graph neural network.
+This is the workspace for odor chemical recognition by laplacian graph neural network. Mol-PECO (**Mol**ecular Representation by **P**ositional **E**ncoding of **Co**ulomb Matrix) is the deep learning framework of extacting molecular representation for odor perception prediction. Mol-PECO's strucutre is as follows:
+<div align=center>
+<img src="https://github.com/Q-bio-at-IIS/Mol-PECO/blob/main/Mol-PECO.png" width="90%" height="90%">
+</div>
 
 ### Text
 [Overleaf]: https://www.overleaf.com/project/63535977cb446c410c09ee7c
 - [Overleaf document][Overleaf]
-
 
 ### Dataset
 #### Data source
@@ -51,10 +52,10 @@ min loss at 12: 0.62    max auc at 12: 0.58:   2%|▊                           
 ```
 ### Train the pure GNN models
 **Command line**
-```python train_pyrfume.py --out_dir ../pyrfume_sois_canon/coulomb_frobenius --gnn_matrix coulomb```
+```python train_pyrfume.py --out_dir ../GNN-Coulomb --gnn_matrix coulomb```
 
 **Parameters**:
-- ```out_dir```: the output folder during training; ```../pyrfume_sois_canon/${out_name}$```, please assgin the output folder in ```${out_name}$```
+- ```out_dir```: the output folder during training; ```${out_name}$```, please assgin the output folder in ```${out_name}$```
 - ```gnn_matrix```: the matrix that we want to model; please choose from ```adjacent``` and ```coulomb```
 
 ### Train the conventional classifier with fingerprints
