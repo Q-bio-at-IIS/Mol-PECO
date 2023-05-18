@@ -17,8 +17,8 @@ from ml_utils import *
 from dl_utils import load_pretrained_infograph
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", default = "../pyrfume_sois_canon/dumped30_coulomb_frobenius/", type = str)
-parser.add_argument("--out_dir", default = "../pyrfume_sois_canon/GNN_addHs5_dumped30_frobenius/", type = str)
+parser.add_argument("--data_dir", default = "../data/", type = str)
+parser.add_argument("--out_dir", default = "../GNN-Coulomb/", type = str)
 parser.add_argument("--gnn_matrix", default = "coulomb") ##adjacent, coulomb, both
 parser.add_argument("--coulomb_bin_step", default = -1, type = int)
 
@@ -38,7 +38,6 @@ parser.add_argument("--lr", default = 1, type = float)
 parser.add_argument("--device", default = 1, type = int)
 parser.add_argument("--model", default = "gcn", type = str)
 
-# parser.add_argument("--pretrained_path", default = "../model_pretrain_by_infograph/zinc2m_aicrowd_dream_new2/lr0.001_regu1.0/drop0.1_emb32_hid16_layer8/min.ckpt")
 parser.add_argument("--pretrained_path", default = "")
 args = parser.parse_args()
 torch.cuda.set_device(args.device)
