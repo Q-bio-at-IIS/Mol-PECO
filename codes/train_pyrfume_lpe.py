@@ -17,11 +17,10 @@ from ml_utils import *
 from dl_utils import load_pretrained_infograph
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", default = "../pyrfume_can_matNor7/CM_f_/", type = str)
-parser.add_argument("--out_dir", default = "../pyrfume_can_matNor7/LGNN2_f_diflr/", type = str)
+parser.add_argument("--data_dir", default = "../data/", type = str)
+parser.add_argument("--out_dir", default = "../MolPECO/", type = str)
 parser.add_argument("--gnn_matrix", default = "coulomb") ##adjacent, coulomb, both
 parser.add_argument("--coulomb_bin_step", default = -1)
-
 parser.add_argument("--batch_size", default = 48, type = int)
 parser.add_argument("--epoch", default = 600, type = int)
 parser.add_argument("--emb_dim", default = 32, type = int)
@@ -32,21 +31,17 @@ parser.add_argument("--atom_num", default = 17, type = int)
 parser.add_argument("--hid_dims", default = []) #[32]
 parser.add_argument("--fc_dims", default = [])#[32, 16]
 parser.add_argument("--lr", default = 0.1, type = float) ## learning rate of > 1 leading to model collapse
-
 parser.add_argument("--max_freq", default = 20, type = int)
 parser.add_argument("--LPE_dim", default = 32, type = int)
 parser.add_argument("--LPE_n_heads", default = 4, type = int)
 parser.add_argument("--LPE_layer", default = 5, type = int)
-
 parser.add_argument("--lambdas", default = [0.0, 0.25, 0.75], type = float, nargs = "+") ## raw, lpe, combined
 parser.add_argument("--device", default = 2, type = int)
 parser.add_argument("--model", default = "GNN", type = str)
-
 parser.add_argument("--lambda_random", default = 0.001, type = float)
-
 parser.add_argument("--which_emb", default = "afterNN", type = str)
-# parser.add_argument("--pretrained_path", default = "../model_pretrain_by_infograph/zinc2m_aicrowd_dream_new2/lr0.001_regu1.0/drop0.1_emb32_hid16_layer8/min.ckpt")
 parser.add_argument("--pretrained_path", default = "")
+
 args = parser.parse_args()
 torch.cuda.set_device(args.device)
 result_path = os.path.join(args.out_dir, "results_min_loss.csv")
@@ -54,12 +49,7 @@ args.hid_dims = [args.hid_dim] * args.hid_layer
 args.fc_dims = [sum(args.hid_dims), 32]
 args.out_dir = os.path.join(
     args.out_dir,
-    # "{}_{}_{}_lran{}".format(args.lambdas[0], args.lambdas[1], args.lambdas[2], args.lambda_random),
-    # "{}_{}_{}".format(args.lambdas[0], args.lambdas[1], args.lambdas[2]),
-    # "lr{}_dim{}_h{}_l{}_lpe{}".format(args.lr, args.hid_dim, args.LPE_n_heads, args.hid_layer, args.LPE_layer))
     "lr{}_lpe{}_l{}".format(args.lr, args.LPE_layer, args.hid_layer))
-    # "lr{}_dim{}".format(args.lr, args.hid_dim))
-    # "lr{}_layer{}_freq{}_lpe{}".format(args.lr, args.hid_layer, args.max_freq, args.LPE_dim))
 print(args.out_dir)
 train_data = PyrfumeData(args.data_dir, "pyrfume_train.xlsx")
 train_loader = DataLoader(train_data, batch_size = args.batch_size, collate_fn = train_data.collate_fn, shuffle = True)
@@ -87,7 +77,7 @@ if args.pretrained_path != "":
 if args.gnn_matrix == "coulomb":
     trainer = TrainerCoulomb(model, train_loader, val_loader, test_loader, args.epoch, train_data.labels, args.out_dir, args.lr, args.lambdas)
 
-# trainer.fit_classification()
+trainer.fit_classification()
 
 # ## test 
 model.load_checkpoint(os.path.join(args.out_dir, "min_loss.ckpt"))
